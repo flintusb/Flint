@@ -13,7 +13,12 @@ compat alias)::
     flint flash-all --image <file> [--image <file> ...] --confirm ARM [--timeout <seconds>]
     flint doctor
     flint completions
+    flint launch
     flint help [<command>]
+
+A bare ``flint`` (no arguments) prints a command overview. The desktop
+app is reached with ``flint launch``, with ``flintw``, or by
+double-clicking ``flint.exe`` — never by accident from a terminal.
 
 Add ``--json`` anywhere for NDJSON output (:envvar:`FLINT_PROGRESS=json`
 is equivalent); add ``--quiet`` to suppress progress and informational
@@ -581,27 +586,79 @@ _COMMAND_HELP: dict[str, str] = {
         "  --retries <1-10>   retries per failed read (default 3)\n"
         "  --quiet            suppress progress and informational messages\n"
     ),
+    "launch": (
+        "flint launch\n"
+        "  Open the Flint desktop app. Takes no options; if the app is\n"
+        "  already running its window is brought to the front. Elevation\n"
+        "  is requested by the app itself when needed. 'flintw' and\n"
+        "  double-clicking flint.exe open the same app.\n"
+    ),
 }
+
+# One-line descriptions for the overview screen and the zsh completion
+# script — a single source so the two can never drift apart.
+_COMMAND_SUMMARY: dict[str, str] = {
+    "list": "List removable drives with the serial --confirm expects",
+    "flash": "Write an image to a drive, erasing everything on it",
+    "verify": "Verify a drive against a SHA-256 checksum or scan for bad blocks",
+    "wipe": "Erase a drive (zero, random, nist, or DoD passes)",
+    "backup": "Copy a drive byte-for-byte into an image file",
+    "clone": "Copy one drive to another byte-for-byte",
+    "queue": "Flash every image listed in a file, one after another",
+    "flash-all": "Fleet mode \u2014 flash every queued image to every drive",
+    "deploy": "Deploy one image to explicit target drives concurrently",
+    "doctor": "Print a diagnostic report of this machine",
+    "report": "Export or verify the local operation history",
+    "completions": "Print a shell completion script",
+    "scan": "Read every sector of a drive to find unreadable media",
+    "launch": "Open the Flint desktop app",
+    "help": "Show help for a command",
+}
+
+# Grouping for the overview screen only (the dispatcher stays flat).
+_OVERVIEW_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Write images", ("flash", "queue", "flash-all", "deploy")),
+    ("Inspect drives & media", ("list", "scan", "verify", "doctor")),
+    ("Maintain drives", ("wipe", "backup", "clone", "report")),
+    ("App & shell", ("launch", "completions", "help")),
+)
 
 
 def _usage() -> str:
+    """Render the command overview shown for a bare ``flint`` and for help."""
     from core.version import APP_VERSION
 
+    width = max(len(name) for name in _COMMAND_SUMMARY) + 2
     lines = [
-        f"Flint {APP_VERSION}",
+        f"  \u2b21 Flint v{APP_VERSION}",
+        "  Write. Verify. Trust.",
+        "",
         "Usage: flint <command> [options]",
         "",
-        "Commands:",
     ]
-    for help_text in _COMMAND_HELP.values():
-        first = help_text.splitlines()[0]
-        lines.append(f"  {first}")
-        lines.append(f"    {help_text.splitlines()[1].strip()}")
-    lines.append("")
-    lines.append(
-        "Run 'flint <command> --help' or 'flint help <command>' for details."
+    for title, names in _OVERVIEW_GROUPS:
+        lines.append(_colorize("90", title))
+        for name in names:
+            lines.append(f"  {name:<{width}}  {_COMMAND_SUMMARY[name]}")
+        lines.append("")
+    hints = (
+        ("flint list", "Show the drives attached to this machine"),
+        ("flint <command> --help", "Detailed help for any command"),
+        ("flint launch", "Open the desktop app"),
     )
-    lines.append("Run 'flint --version' for the version.")
+    hint_width = max(len(cmd) for cmd, _ in hints) + 2
+    lines.append(_colorize("90", "Get started"))
+    for cmd, hint in hints:
+        lines.append(f"  {cmd:<{hint_width}}  {hint}")
+    lines.extend(
+        [
+            "",
+            "Docs: https://flintweb.vercel.app/cli",
+            "",
+            "Run 'flint <command> --help' or 'flint help <command>' for details.",
+            "Run 'flint --version' for the version.",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -2623,7 +2680,7 @@ _POWERSHELL_COMPLETION = """# flint PowerShell completion
 # Save to $PROFILE:  flint completions | Out-File -Append $PROFILE
 Register-ArgumentCompleter -CommandName flint -Native -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $commands = @('list','flash','verify','wipe','backup','clone','queue','flash-all','deploy','doctor','report','completions','help','scan','--version')
+    $commands = @('list','flash','verify','wipe','backup','clone','queue','flash-all','deploy','doctor','report','completions','scan','launch','help','--version')
     $options  = @(__PS_OPTIONS__)
     try {
         $raw = & flint list --json 2>$null
@@ -2673,7 +2730,7 @@ _flint_completions() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    commands='list flash verify wipe backup clone queue flash-all deploy doctor report completions help scan'
+    commands='list flash verify wipe backup clone queue flash-all deploy doctor report completions scan launch help'
     options='__BASH_OPTIONS__'
 
     if [[ ${cur} == -* ]]; then
@@ -2702,20 +2759,7 @@ _ZSH_COMPLETION = """# flint zsh completion
 _flint() {
     local -a commands options
     commands=(
-        'list:Print every detected drive with serial'
-        'flash:Write an image to a drive'
-        'verify:Verify a drive (bad-block scan or SHA-256 compare)'
-        'wipe:Erase a drive'
-        'backup:Copy a drive to an image file'
-        'clone:Copy one drive to another'
-        'queue:Flash multiple images from a file'
-        'flash-all:Fleet mode - flash every queued image to every drive'
-        'deploy:Deploy one image to explicit drives concurrently'
-        'doctor:Print diagnostic report'
-        'report:Export or verify operation history'
-        'completions:Print shell completion script'
-        'scan:Read every sector to find unreadable media'
-        'help:Show help'
+__ZSH_COMMANDS__
     )
     options=(
 __ZSH_OPTIONS__
@@ -2737,6 +2781,14 @@ __ZSH_OPTIONS__
 
 _flint "$@"
 """
+# Generated from the overview source so zsh descriptions can never drift.
+_ZSH_COMPLETION = _ZSH_COMPLETION.replace(
+    "__ZSH_COMMANDS__",
+    "\n".join(
+        f"        '{name}:{_COMMAND_SUMMARY[name]}'"
+        for name in _COMMAND_SUMMARY
+    ),
+)
 _ZSH_COMPLETION = _ZSH_COMPLETION.replace("__ZSH_OPTIONS__", _zsh_option_lines())
 
 
@@ -2867,6 +2919,23 @@ def _cmd_completions(opts: dict[str, object]) -> int:
     )
 
 
+def _cmd_launch(opts: dict[str, object]) -> int:
+    """Reject an embedded ``launch`` — the real one never reaches the CLI.
+
+    ``flint launch`` is intercepted by the process entry point
+    (``main.main``) before the CLI parser runs, because opening the GUI
+    must never import ``ui/*`` from ``core/*``. This handler exists only
+    so ``launch`` is a known command for help, completions and option
+    validation; reaching it means the caller bypassed the launcher
+    (an embedder or a test calling ``cli.main(["launch"])`` directly).
+    """
+    return _result(
+        "fail",
+        "'flint launch' opens the desktop app; run it from a terminal, not embedded",
+        EXIT_USAGE,
+    )
+
+
 _COMMANDS = {
     "list": _cmd_list,
     "flash": _cmd_flash,
@@ -2881,6 +2950,7 @@ _COMMANDS = {
     "report": _cmd_report,
     "completions": _cmd_completions,
     "scan": _cmd_scan,
+    "launch": _cmd_launch,
 }
 
 # The parser accepts every option for every command; each command then
@@ -2964,6 +3034,7 @@ _COMMAND_OPTS: dict[str, frozenset[str]] = {
     "report": frozenset({"out", "format", "integrity", "quiet"}),
     "completions": frozenset({"shell", "quiet"}),
     "scan": frozenset({"drive", "retries", "verbose", "quiet"}),
+    "launch": frozenset(),
 }
 
 
@@ -3074,10 +3145,8 @@ def main(argv: list[str] | None = None) -> int:
         _eprint(f"\u2514{bar}\u2518")
         return _result("ok", f"Flint v{APP_VERSION}", EXIT_OK)
     if not argv:
-        from core.version import APP_VERSION
-
-        _eprint(f"  \u2b21 Flint v{APP_VERSION}")
-        _eprint("  \u2b21 Write. Verify. Trust.")
+        # The overview itself carries the banner; stderr stays clean so
+        # piping stdout into a file does not duplicate it.
         if _JSON:
             return _result("ok", "no command given", EXIT_OK)
         _print(_usage())
@@ -3131,7 +3200,10 @@ def main(argv: list[str] | None = None) -> int:
     deploy_read_only = command == "deploy" and not opts.get("run") and any(
         opts.get(name) for name in ("status", "cancel", "retry")
     )
-    if command in ("list", "doctor", "report", "completions") or deploy_read_only:
+    # ``launch`` is included so an embedded call never triggers a UAC
+    # relaunch: the real 'flint launch' is intercepted by main.main and
+    # handles elevation inside the GUI itself.
+    if command in ("list", "doctor", "report", "completions", "launch") or deploy_read_only:
         # No privileges needed: skip the UAC relaunch.
         return _COMMANDS[command](opts)
 

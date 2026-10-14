@@ -44,7 +44,7 @@ Documentation = "https://flintweb.vercel.app/docs"
 flint = "main:main"
 
 [project.gui-scripts]
-flintw = "main:main"
+flintw = "main:gui_main"
 
 [tool.setuptools]
 packages = ["core", "ui"]

@@ -246,20 +246,57 @@ def _maybe_show_crash_report(
             clipboard.setText(content.strip())
 
 
-def main() -> int:
+def _console_available() -> bool:
+    """Return True when a console this process can print to is attached.
+
+    Decides what a bare ``flint`` does: with a console (cmd, PowerShell, a
+    pip launcher typed in a terminal) the CLI command overview is shown;
+    without one (double-clicked flint.exe, pythonw, flintw) the GUI starts,
+    since CLI output there would be invisible.
+    """
+    if sys.stdout is None or sys.stderr is None:
+        # pythonw / flintw / flint.pyw: windowless interpreter, no stdio.
+        return False
+    try:
+        import msvcrt
+
+        handle = msvcrt.get_osfhandle(sys.stdout.fileno())
+        # FILE_TYPE_DISK=1, FILE_TYPE_CHAR=2 (console), FILE_TYPE_PIPE=3.
+        if handle != -1 and ctypes.windll.kernel32.GetFileType(handle) in (
+            1,
+            2,
+            3,
+        ):
+            return True
+    except Exception:
+        pass
+    if getattr(sys, "frozen", False):
+        # Windowed PyInstaller build launched from cmd/PowerShell: the std
+        # handles are not real, but the parent console can be attached to
+        # (the same trick as cli._ensure_cli_stdio). From Explorer there is
+        # no parent console, AttachConsole fails, and the GUI is the answer.
+        try:
+            ATTACH_PARENT_PROCESS = 0xFFFFFFFF
+            if ctypes.windll.kernel32.AttachConsole(ATTACH_PARENT_PROCESS):
+                sys.stdout = open(  # noqa: SIM115
+                    "CONOUT$", "w", encoding="utf-8", errors="replace"
+                )
+                sys.stderr = open(  # noqa: SIM115
+                    "CONOUT$", "w", encoding="utf-8", errors="replace"
+                )
+                sys.stdin = open(  # noqa: SIM115
+                    "CONIN$", "r", encoding="utf-8", errors="replace"
+                )
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _run_gui() -> int:
+    """Start the desktop app: elevation, single-instance, tray, main window."""
     global logger
     global _server_global
-
-    args = sys.argv[1:]
-    if args:
-        # Any argument detours to headless mode: no elevation prompt loop,
-        # no single-instance lock, no window. Exit codes and machine-readable
-        # output come from the cli module (which also explains unknown args,
-        # so 'flint frobnicate' can never silently open a window). A bare
-        # launch with no arguments starts the GUI.
-        from core import cli
-
-        return cli.main()
 
     try:
         from PyQt6.QtCore import QTimer
@@ -367,6 +404,39 @@ def main() -> int:
         except OSError:
             pass
         return 1
+
+
+def gui_main() -> int:
+    """Entry point for windowless launchers (flintw, flint.pyw): always the GUI."""
+    return _run_gui()
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Dispatch between the CLI and the desktop app.
+
+    - ``flint launch`` (no other arguments) opens the GUI. A second
+      invocation focuses the already-running window (single instance).
+    - A bare ``flint`` shows the CLI command overview when a console is
+      attached, and starts the GUI when there is none (double-clicked
+      flint.exe, pythonw) so the portable no-install flow keeps working.
+    - Anything else is a CLI command; unknown commands are explained by
+      the CLI and can never silently open a window.
+    """
+    args = list(sys.argv[1:] if argv is None else argv)
+    # Route on the non-global arguments only: '--json launch' etc. still
+    # mean "open the app" (the GUI ignores global output flags).
+    routed = [a for a in args if a not in ("--cli", "--json", "--quiet")]
+    if routed == ["launch"]:
+        return _run_gui()
+    if not args:
+        if _console_available():
+            from core import cli
+
+            return cli.main([])
+        return _run_gui()
+    from core import cli
+
+    return cli.main(args)
 
 
 if __name__ == "__main__":

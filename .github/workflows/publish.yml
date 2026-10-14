@@ -114,7 +114,9 @@ jobs:
       - name: Smoke test built executable
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath (Join-Path $pwd 'dist\flint.exe') -PassThru
+          # 'launch' opens the GUI: a bare flint.exe in a console now prints
+          # the CLI command overview and exits, which is not a liveness test.
+          $p = Start-Process -FilePath (Join-Path $pwd 'dist\flint.exe') -ArgumentList 'launch' -PassThru
           Start-Sleep -Seconds 12
           if ($p.HasExited) {
             throw "flint.exe exited during smoke test (exit code $($p.ExitCode))"

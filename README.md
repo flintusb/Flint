@@ -98,6 +98,9 @@ walkthrough is on the [comparison page](https://flintweb.vercel.app/compare).
 
 - [Latest release](https://github.com/gowthvm/Flint/releases/latest) — download
   `flint.exe`. No installer, no dependencies, no telemetry.
+- Double-click it to open the desktop app. Run it from a terminal instead and
+  a bare `flint.exe` prints the CLI command overview; `flint.exe launch` opens
+  the app explicitly.
 - Windows 10/11, 64-bit. Runs elevated, so Windows may ask for administrator
   permission on every launch.
 
@@ -134,9 +137,10 @@ pip install flint-usb
 This installs a GUI and a CLI:
 
 ```powershell
-flint          # open the GUI
-flintw         # GUI without console window
-flint --help   # CLI usage
+flint          # CLI: show the command overview
+flint launch   # open the desktop app
+flintw         # desktop app, no console window
+flint --help   # same overview (flint help <command> for details)
 ```
 
 pip pulls in PyQt6, psutil, pywin32, and wmi as dependencies. On first run
@@ -253,7 +257,9 @@ history.
 ## Headless mode
 
 Every feature is available headless (command-line only, no GUI) for imaging
-labs, scripts, and CI. In the examples below, `flint` is the CLI — whether
+labs, scripts, and CI. Running `flint` with no arguments prints a grouped
+overview of every command; `flint launch` opens the desktop app from the same
+terminal. In the examples below, `flint` is the CLI — whether
 from the downloaded `flint.exe` or the pip-installed launcher. Commands that
 need it relaunch elevated automatically (one UAC prompt); `list`, `doctor`,
 `report`, `completions`, `help`, and the read-only `deploy --status |

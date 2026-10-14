@@ -433,6 +433,82 @@ def test_no_args_prints_usage(capsys):
     assert "Usage: flint <command>" in capsys.readouterr().out
 
 
+def test_overview_lists_every_command(capsys):
+    """The bare-flint overview is the full catalog, grouped and documented."""
+    assert cli.main([]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    for name in (
+        "flash",
+        "queue",
+        "flash-all",
+        "deploy",
+        "list",
+        "scan",
+        "verify",
+        "doctor",
+        "wipe",
+        "backup",
+        "clone",
+        "report",
+        "launch",
+        "completions",
+        "help",
+    ):
+        assert name in out
+    assert "Get started" in out
+    assert "Docs: https://flintweb.vercel.app/cli" in out
+
+
+def test_summary_covers_every_command():
+    """_COMMAND_SUMMARY feeds the overview and zsh completions."""
+    assert set(cli._COMMAND_SUMMARY) == set(cli._COMMANDS) | {"help"}
+
+
+def test_launch_help(capsys):
+    assert cli.main(["help", "launch"]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "flint launch" in out
+    assert "desktop app" in out
+
+
+def test_launch_flag_help(capsys):
+    assert cli.main(["launch", "--help"]) == cli.EXIT_OK
+    assert "flint launch" in capsys.readouterr().out
+
+
+def test_launch_rejected_when_reaching_cli(capsys):
+    """main.main intercepts 'flint launch'; the CLI fallback fails closed."""
+    assert cli.main(["launch"]) == cli.EXIT_USAGE
+    assert "desktop app" in capsys.readouterr().out
+
+
+def test_launch_rejects_options(capsys):
+    assert cli.main(["launch", "--yes"]) == cli.EXIT_USAGE
+    assert "not valid for command launch" in capsys.readouterr().out
+
+
+def test_launch_never_triggers_elevation(monkeypatch):
+    def _boom(argv: list[str]) -> None:
+        raise AssertionError("launch must not go through the UAC relaunch")
+
+    monkeypatch.setattr(cli, "ensure_elevated", _boom)
+    assert cli.main(["launch"]) == cli.EXIT_USAGE
+
+
+def test_completions_offer_launch():
+    for script in (
+        cli._POWERSHELL_COMPLETION,
+        cli._BASH_COMPLETION,
+        cli._ZSH_COMPLETION,
+    ):
+        assert "launch" in script
+
+
+def test_zsh_descriptions_match_summary():
+    for name, summary in cli._COMMAND_SUMMARY.items():
+        assert f"'{name}:{summary}'" in cli._ZSH_COMPLETION
+
+
 def test_flash_has_own_help(capsys):
     assert cli.main(["flash", "--help"]) == cli.EXIT_OK
     assert "flint flash --image" in capsys.readouterr().out

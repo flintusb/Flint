@@ -977,15 +977,18 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _elevation_command() -> tuple[str, str]:
+        # Always relaunch explicitly with 'launch': the elevated process may
+        # inherit the caller's console, and a bare invocation now shows the
+        # CLI overview instead of the app.
         if getattr(sys, "frozen", False):
-            return sys.executable, ""
+            return sys.executable, "launch"
         script = os.path.abspath(sys.argv[0])
         exe = sys.executable
         if exe.lower().endswith("python.exe"):
             alt = exe[: -len("python.exe")] + "pythonw.exe"
             if os.path.isfile(alt):
                 exe = alt
-        return exe, f'"{script}"'
+        return exe, f'"{script}" launch'
 
     def _relaunch_elevated(self) -> None:
         if self._is_elevated():
