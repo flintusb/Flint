@@ -467,9 +467,7 @@ class IsoDropZone(QFrame):
         self._drop_error.setVisible(False)
         self._drop_timer = QTimer(self)
         self._drop_timer.setSingleShot(True)
-        self._drop_timer.timeout.connect(
-            lambda: self._drop_error.setVisible(False)
-        )
+        self._drop_timer.timeout.connect(self._hide_drop_error)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -478,6 +476,16 @@ class IsoDropZone(QFrame):
         layout.addWidget(self._loaded)
         layout.addWidget(self._drop_error)
         layout.addSpacing(8)
+
+    def _hide_drop_error(self) -> None:
+        """Hide the unsupported-file message when the drop timer fires.
+
+        A bound method (not a ``lambda``) so Qt auto-disconnects it if
+        this widget's C++ object is destroyed; a lambda would keep a
+        stale callable that the event pump of a later test can invoke
+        after the zone is gone.
+        """
+        self._drop_error.setVisible(False)
 
     def _build_empty_state(self) -> QWidget:
         widget = QWidget()
@@ -922,6 +930,27 @@ class IsoDropZone(QFrame):
         except ValueError:
             pass
 
+    def _on_retired_worker_finished(self) -> None:
+        """A retired worker's ``finished`` signal: release that worker.
+
+        Bound method, not a ``lambda``: a lambda connection has no
+        QObject receiver, so it stays deliverable after this widget's
+        C++ object is gone — a queued delivery then crashed the event
+        pump of an unrelated later test. As a bound method Qt
+        disconnects automatically when the zone is destroyed.
+        ``sender()`` identifies the worker for real threads; the test
+        fakes emit a plain signal (no sender), so fall back to the
+        first stopped entry.
+        """
+        worker = self.sender()
+        if isinstance(worker, QThread):
+            self._release_retired_worker(worker)
+            return
+        for candidate in self._retired_workers:
+            if not candidate.isRunning():
+                self._release_retired_worker(candidate)
+                break
+
     def _prune_retired_workers(self) -> None:
         """W1: keep the retirement list bounded.
 
@@ -952,7 +981,7 @@ class IsoDropZone(QFrame):
             # so retain it and let its `finished` signal release it.
             self._retired_workers.append(dc)
             self._prune_retired_workers()
-            dc.finished.connect(lambda: self._release_retired_worker(dc))
+            dc.finished.connect(self._on_retired_worker_finished)
             return
         self._remove_decompress_tmp_dir(dc)
 

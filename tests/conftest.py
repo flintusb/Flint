@@ -134,6 +134,34 @@ def _isolated_system_disk_cache(monkeypatch):
     monkeypatch.setattr(drives, "_OTHER_SYSTEM_CACHE", None)
 
 
+@pytest.fixture(autouse=True)
+def _stop_stale_drop_timers():
+    """Stop any IsoDropZone drop timer that outlives its test.
+
+    The error-hiding timer is a 3-5 s single-shot armed by drop/load paths.
+    A test can arm it and end before it fires; the timer is a child of the
+    zone, and (since the callback is now a bound method) the zone is
+    collectable, but a surviving window/zone wrapper would let the timer
+    fire inside a later, unrelated test's pytest-qt event pump - the flaky
+    CI access violation in ui/widgets.py. Stopping every surviving timer at
+    each test boundary removes that whole failure class.
+    """
+    yield
+    from PyQt6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    from ui.widgets import IsoDropZone
+
+    for widget in app.allWidgets():
+        if isinstance(widget, IsoDropZone):
+            try:
+                widget._drop_timer.stop()
+            except RuntimeError:
+                pass  # C++ object already deleted; nothing to stop
+
+
 @pytest.fixture()
 def _make_window(monkeypatch):
     """Create a MainWindow without showing it (skips elevation checks)."""

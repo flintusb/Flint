@@ -98,6 +98,24 @@ class _FakeWorker:
         self.finished.emit()
 
 
+_zones: list = []
+
+
+@pytest.fixture(autouse=True)
+def _stop_zone_drop_timers():
+    """Stop any drop timer a test armed but never cancelled.
+
+    ``test_load_iso_on_vanished_path_shows_inline_error`` deliberately
+    asserts the timer is active; without this guard the 5 s single-shot
+    could fire inside a later test's pytest-qt event pump (the flaky CI
+    access violation we traced to ``ui/widgets.py``).
+    """
+    yield
+    for zone in _zones:
+        zone._drop_timer.stop()
+    _zones.clear()
+
+
 
 # --- W1 -----------------------------------------------------------------
 
@@ -189,7 +207,9 @@ def test_prune_is_a_noop_for_a_short_list(qapp):
 def _zone():
     from ui.widgets import IsoDropZone
 
-    return IsoDropZone()
+    zone = IsoDropZone()
+    _zones.append(zone)
+    return zone
 
 
 def _tmp_dir(tmp_path, name: str = "flint-decompress-xyz"):
