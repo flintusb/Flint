@@ -186,10 +186,10 @@ overwriting the wrong drive.
   (default 3) and reports the 4 KiB-aligned offsets of sectors that never read
   back; unreadable chunks are skipped so the rest of the image is still checked.
 - **Checksum sidecars** — if a `*.sha256` file sits next to your image
-  (`ubuntu.iso.sha256` or `ubuntu.sha256`), Flint reads it, verifies the image
-  digest against it, and shows the result under the image source. A mismatch
-  blocks flashing — a corrupt or wrong image can never erase a drive by
-  accident.
+  (`ubuntu-24.04.iso.sha256` or `ubuntu-24.04.sha256`), Flint reads it, verifies
+  the image digest against it, and shows the result under the image source. A
+  mismatch blocks flashing — a corrupt or wrong image can never erase a drive
+  by accident.
 - On mismatch, Flint offers to retry the write or abort. A cancelled
   verification is reported as completed-but-unverified — never as a false
   success.
@@ -268,19 +268,20 @@ need it relaunch elevated automatically (one UAC prompt); `list`, `doctor`,
 `flash`. The older `--cli` flag is still
 accepted as a compatibility alias:
 
-```text
+```powershell
 flint list
-flint flash  --image image.iso --drive E: --confirm <serial> [--verify]
-flint verify --drive E: [--sha256 <hex> --image image.iso]
+flint flash  --image C:\images\ubuntu-24.04.iso --drive E: --confirm 4C530001270509112345 [--verify]
+flint verify --drive E: [--sha256 <hex> --image C:\images\ubuntu-24.04.iso]
 flint scan   --drive E: [--retries <1-10>]
-flint wipe   --drive E: --confirm <serial> [--method zero|random|nist|dod]
-flint backup --drive E: --out backup.img [--confirm <serial>]
-flint clone  --from E: --to F: --confirm <serial of --to>
-flint queue  --file list.txt --drive E: --confirm <serial>
-flint flash-all --image image.iso [--image image2.iso ...] --confirm ARM [--timeout <seconds>]
-flint deploy --image image.iso --drive E: --drive F: --confirm ARM [--parallel 2]
+flint wipe   --drive E: --confirm 4C530001270509112345 [--method zero|random|nist|dod]
+flint backup --drive E: --out C:\backups\stick.img [--confirm 4C530001270509112345]
+flint clone  --from E: --to F: --confirm 4C530001270509112346
+flint queue  --file jobs.txt --drive E: --confirm 4C530001270509112345
+flint flash-all --image C:\images\agent.iso [--image C:\images\tools.iso ...] --confirm ARM [--timeout <seconds>]
+flint deploy --image C:\images\ubuntu-24.04.iso --drive E: --drive F: --confirm ARM [--parallel 2]
 flint report --integrity
 flint doctor
+flint launch
 flint completions | Out-File -Append $PROFILE
 flint help [<command>]
 ```
@@ -335,7 +336,64 @@ flint help [<command>]
   cancelled, or resumable jobs and never bypasses target identity checks.
 - `flint completions --shell powershell|bash|zsh` prints a shell completion
   script (commands, options, and live drive serials); for example
-  `flint completions --shell bash | tee ~/.bashrc`.
+  `flint completions --shell bash | sudo tee /etc/bash_completion.d/flint`.
+
+### Examples
+
+> **Destruction is total.** `flash`, `wipe`, `clone`, `queue`, `flash-all`
+> and `deploy` erase everything on the target. `--confirm` must be the exact
+> serial printed by `flint list`; fleet commands arm with the literal word
+> `ARM`; `--yes` is the deliberate unattended bypass for scripts.
+
+**1. Find a drive, then flash it** — always start with `list`; the serial it
+prints is what `--confirm` expects:
+
+```powershell
+flint list
+flint flash --image C:\images\ubuntu-24.04.iso --drive E: --confirm 4C530001270509112345 --verify
+```
+
+**2. Unattended CI flash** — `--yes` skips the prompt, `--check-fake` probes
+for counterfeit capacity, `--quiet --json` leaves pure NDJSON on stdout:
+
+```powershell
+flint flash --image C:\images\ubuntu-24.04.iso --drive E: --yes --verify --check-fake --quiet --json
+```
+
+**3. Fleet bench campaign** — arm with `ARM`, watch for new sticks for two
+hours, flash four at a time, skip anything already done:
+
+```powershell
+flint flash-all --image C:\images\agent.iso --confirm ARM --timeout 7200 --parallel 4 --skip-flashed --verify
+```
+
+**4. Named-target deploy with job recovery** — every target is tracked as a
+persistent job; inspect, requeue and resume after a restart:
+
+```powershell
+flint deploy --image C:\images\ubuntu-24.04.iso --drive E: --drive F: --confirm ARM --verify --parallel 3
+flint deploy --status
+flint deploy --retry --job <id>
+flint deploy --run --job <id>
+```
+
+**5. Compliance audit chain** — prove the operation log is untampered, then
+export it for spreadsheets:
+
+```powershell
+flint report --integrity
+flint report --out C:\reports\flint-history.csv --format csv
+```
+
+**6. Triage a suspect stick** — discover it, sweep the media, then preserve
+an image before anything else touches it:
+
+```powershell
+flint list
+flint scan --drive E: --retries 5 --verbose
+flint verify --drive E:
+flint backup --drive E: --out C:\backups\suspect.img --check-fake
+```
 
 ## Troubleshooting
 

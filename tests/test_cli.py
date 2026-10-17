@@ -509,6 +509,30 @@ def test_zsh_descriptions_match_summary():
         assert f"'{name}:{summary}'" in cli._ZSH_COMPLETION
 
 
+def test_every_command_help_has_example():
+    """Every dispatched command ships a worked Example line in its help."""
+    for name in cli._COMMANDS:
+        assert "Example:" in cli._COMMAND_HELP[name], name
+
+
+def test_help_command_has_help_entry():
+    assert "Example:" in cli._COMMAND_HELP["help"]
+
+
+def test_help_for_help(capsys):
+    assert cli.main(["help", "help"]) == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "flint help [<command>]" in out
+    assert "flint help flash" in out
+
+
+def test_docstring_lists_every_command():
+    """The module docstring invocation index must not omit commands."""
+    doc = cli.__doc__ or ""
+    for name in cli._COMMANDS:
+        assert name in doc, name
+
+
 def test_flash_has_own_help(capsys):
     assert cli.main(["flash", "--help"]) == cli.EXIT_OK
     assert "flint flash --image" in capsys.readouterr().out

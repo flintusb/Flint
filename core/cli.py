@@ -11,6 +11,9 @@ compat alias)::
     flint clone  --from <serial|letter|path> --to <serial|letter|path> --confirm <serial of --to>
     flint queue  --file <list.txt> --drive <serial|letter|path> --confirm <serial>
     flint flash-all --image <file> [--image <file> ...] --confirm ARM [--timeout <seconds>]
+    flint deploy --image <file> --drive <serial|letter|path> [--drive ...] --confirm ARM
+    flint scan   --drive <serial|letter|path> [--retries <1-10>]
+    flint report [--out <file>] [--format json|csv|markdown] [--integrity]
     flint doctor
     flint completions
     flint launch
@@ -466,7 +469,7 @@ _COMMAND_HELP: dict[str, str] = {
         "                         saved offset (reads '<image>.flint_job.json');\n"
         "                         only meaningful for raw writes to the same drive\n"
         "  --quiet                suppress progress and informational messages\n"
-        "  Example: flint flash --image C:\\img\\ubuntu.iso --drive E: --confirm 4C530001270509112345\n"
+        "  Example: flint flash --image C:\\images\\ubuntu-24.04.iso --drive E: --confirm 4C530001270509112345\n"
     ),
     "verify": (
         "flint verify --drive <serial|letter|path>\n"
@@ -474,7 +477,7 @@ _COMMAND_HELP: dict[str, str] = {
         "  Verify a drive. Without --sha256 it is a read-only bad-block scan\n"
         "  of the whole drive. With --sha256 the digest covers only the image\n"
         "  bytes, so --image is required to know how many bytes to compare.\n"
-        "  Example: flint verify --drive E: --sha256 0a4b8c… --image C:\\img\\ubuntu.iso\n"
+        "  Example: flint verify --drive E: --sha256 0a4b8c… --image C:\\images\\ubuntu-24.04.iso\n"
     ),
     "wipe": (
         "flint wipe --drive <serial|letter|path>\n"
@@ -493,7 +496,7 @@ _COMMAND_HELP: dict[str, str] = {
         "  confirmation is optional.\n"
         "  --yes                  continue without optional serial validation\n"
         "  --quiet                suppress progress and informational messages\n"
-        "  Example: flint backup --drive E: --out C:\\img\\backup.img\n"
+        "  Example: flint backup --drive E: --out C:\\backups\\stick.img\n"
     ),
     "clone": (
         "flint clone --from <serial|letter|path> --to <serial|letter|path>\n"
@@ -516,7 +519,7 @@ _COMMAND_HELP: dict[str, str] = {
         "                         write mode for every image (default: auto)\n"
         "  --bypass-tpm           patch boot.wim (needs file-copy mode)\n"
         "  --quiet                suppress progress and informational messages\n"
-        "  Example: flint queue --file queue.txt --drive E: --confirm 4C530001270509112345\n"
+        "  Example: flint queue --file jobs.txt --drive E: --confirm 4C530001270509112345\n"
     ),
     "flash-all": (
         "flint flash-all --image <file> [--image <file> ...]\n"
@@ -539,7 +542,7 @@ _COMMAND_HELP: dict[str, str] = {
         "                         write mode for every image (default: auto)\n"
         "  --bypass-tpm           patch boot.wim (needs file-copy mode)\n"
         "  --quiet                suppress progress and informational messages\n"
-        "  Example: flint flash-all --image C:\\img\\agent.iso --confirm ARM\n"
+        "  Example: flint flash-all --image C:\\images\\agent.iso --confirm ARM\n"
     ),
     "deploy": (
         "flint deploy --image <file> --drive <serial|letter|path> [--drive ...]\n"
@@ -548,12 +551,14 @@ _COMMAND_HELP: dict[str, str] = {
         "  Deploy one image to explicit target drives concurrently.\n"
         "  Each target is tracked independently and failures do not erase\n"
         "  the result of other targets. Default concurrency is 2.\n"
-        "  --status               list persisted deployment jobs\n"
+        "  --status               list persisted deployment jobs (no privileges)\n"
         "  --cancel --job <id>    cancel a queued/resumable job\n"
         "  --retry --job <id>     return a failed job to queued state\n"
         "  --run --job <id>       execute or resume a persisted job (writes,\n"
         "                         so it elevates like 'flint flash'; the other\n"
         "                         job sub-commands need no privileges)\n"
+        "  Example: flint deploy --image C:\\images\\ubuntu-24.04.iso --drive E: --drive F: --confirm ARM --verify\n"
+        "           flint deploy --status\n"
     ),
     "doctor": (
         "flint doctor\n"
@@ -567,7 +572,11 @@ _COMMAND_HELP: dict[str, str] = {
         "flint report [--out <file>] [--format json|csv|markdown] [--integrity]\n"
         "  Export local operation history or verify its hash-chain integrity.\n"
         "  --out <file>  copy the history JSON to a destination path\n"
+        "  --format json|csv|markdown\n"
+        "                export format for --out (default json)\n"
         "  --integrity   fail if an audited record was changed or reordered\n"
+        "  Example: flint report --integrity\n"
+        "           flint report --out C:\\reports\\flint-history.csv --format csv\n"
     ),
     "completions": (
         "flint completions [--shell powershell|bash|zsh]\n"
@@ -578,13 +587,16 @@ _COMMAND_HELP: dict[str, str] = {
         "  PowerShell: flint completions | Out-File -Append $PROFILE\n"
         "  Bash: flint completions --shell bash | sudo tee /etc/bash_completion.d/flint\n"
         "  Zsh: flint completions --shell zsh > /usr/local/share/zsh/site-functions/_flint\n"
+        "  Example: flint completions | Out-File -Append $PROFILE\n"
     ),
     "scan": (
-        "flint scan --drive <serial|letter|path> [--retries <1-10>] [--quiet]\n"
+        "flint scan --drive <serial|letter|path> [--retries <1-10>] [--verbose] [--quiet]\n"
         "  Read every sector on a drive to find unreadable media.\n"
         "  Read-only; does not modify the drive. No image needed.\n"
         "  --retries <1-10>   retries per failed read (default 3)\n"
+        "  --verbose          print up to 50 bad-sector offsets on failure\n"
         "  --quiet            suppress progress and informational messages\n"
+        "  Example: flint scan --drive E: --retries 5 --verbose\n"
     ),
     "launch": (
         "flint launch\n"
@@ -592,6 +604,14 @@ _COMMAND_HELP: dict[str, str] = {
         "  already running its window is brought to the front. Elevation\n"
         "  is requested by the app itself when needed. 'flintw' and\n"
         "  double-clicking flint.exe open the same app.\n"
+        "  Example: flint launch\n"
+    ),
+    "help": (
+        "flint help [<command>]\n"
+        "  Show the command overview, or detailed help for one command.\n"
+        "  'flint <command> --help' and 'flint <command> -h' are equivalent\n"
+        "  ways to ask for the same text.\n"
+        "  Example: flint help flash\n"
     ),
 }
 
@@ -3155,7 +3175,7 @@ def main(argv: list[str] | None = None) -> int:
     if first in ("help", "--help", "-h"):
         text = (
             _command_help(argv[1])
-            if len(argv) >= 2 and argv[1] in _COMMANDS
+            if len(argv) >= 2 and (argv[1] in _COMMANDS or argv[1] == "help")
             else _usage()
         )
         if _JSON:
