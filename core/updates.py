@@ -26,7 +26,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from core.checksum import parse_sidecar
 from core.version import APP_VERSION
 
-_DEFAULT_URL = "https://api.github.com/repos/gowthvm/Flint/releases/latest"
+_DEFAULT_URL = "https://api.github.com/repos/flintusb/Flint/releases/latest"
 _UA = f"Flint/{APP_VERSION} (update-check)"
 
 

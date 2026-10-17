@@ -6,8 +6,8 @@ Write disk images to USB drives on Windows 10/11, then verify that every byte wa
 writes, bounded multi-drive deployment, audit reports, clone read-back
 verification, and structured boot-confidence diagnostics.
 
-[![Release](https://img.shields.io/github/v/release/gowthvm/Flint)](https://github.com/gowthvm/Flint/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/gowthvm/Flint/total)](https://github.com/gowthvm/Flint/releases)
+[![Release](https://img.shields.io/github/v/release/flintusb/Flint)](https://github.com/flintusb/Flint/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/flintusb/Flint/total)](https://github.com/flintusb/Flint/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11%2064--bit-0078d6)
 [![Docs](https://img.shields.io/badge/docs-flintweb.vercel.app-0078d6)](https://flintweb.vercel.app)
@@ -96,7 +96,7 @@ walkthrough is on the [comparison page](https://flintweb.vercel.app/compare).
 
 ### Portable executable
 
-- [Latest release](https://github.com/gowthvm/Flint/releases/latest) — download
+- [Latest release](https://github.com/flintusb/Flint/releases/latest) — download
   `flint.exe`. No installer, no dependencies, no telemetry.
 - Double-click it to open the desktop app. Run it from a terminal instead and
   a bare `flint.exe` prints the CLI command overview; `flint.exe launch` opens
@@ -425,7 +425,7 @@ The complete symptom guide lives in the
 ### Setup
 
 ```powershell
-git clone https://github.com/gowthvm/Flint.git
+git clone https://github.com/flintusb/Flint.git
 cd Flint
 
 python -m venv .venv
@@ -543,7 +543,7 @@ Flint/
 - Full manual — user guide, CLI reference, and FAQ:
   https://flintweb.vercel.app
 - Report issues and open pull requests on GitHub:
-  https://github.com/gowthvm/Flint
+  https://github.com/flintusb/Flint
 
 ## License
 

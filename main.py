@@ -23,7 +23,7 @@ if platform.system() != "Windows":
         "If you installed via pip, you can uninstall with:\n"
         "  pip uninstall flint-usb\n"
         "\n"
-        "For details see: https://github.com/gowthvm/Flint",
+        "For details see: https://github.com/flintusb/Flint",
         file=sys.stderr,
     )
     sys.exit(1)
