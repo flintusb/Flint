@@ -2,9 +2,10 @@
 
 Write disk images to USB drives on Windows 10/11, then verify that every byte was written correctly.
 
-**Current release: 2.0.1** — durable deployment campaigns, safe resumable
-writes, bounded multi-drive deployment, audit reports, clone read-back
-verification, and structured boot-confidence diagnostics.
+**Current release: 2.1.0** — instant CLI command overview, one-command
+desktop app launch, wakeable drive polling, durable deployment campaigns,
+safe resumable writes, bounded multi-drive deployment, audit reports,
+clone read-back verification, and structured boot-confidence diagnostics.
 
 [![Release](https://img.shields.io/github/v/release/flintusb/Flint)](https://github.com/flintusb/Flint/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/flintusb/Flint/total)](https://github.com/flintusb/Flint/releases)

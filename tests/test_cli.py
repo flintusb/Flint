@@ -2466,7 +2466,7 @@ def test_result_line_survives_ascii_codepage_pipe(monkeypatch):
     monkeypatch.setattr(cli, "_JSON", False)
     monkeypatch.setattr(cli, "_QUIET", False)
 
-    rc = cli._result("ok", "Flint v2.0.1", cli.EXIT_OK)
+    rc = cli._result("ok", "Flint v0.0.0-test", cli.EXIT_OK)
 
     ascii_stream.flush()
     assert rc == cli.EXIT_OK
