@@ -11,6 +11,15 @@ _DIGCF_PRESENT = 0x00000002
 _SPDRP_PHYSICAL_DEVICE_OBJECT_NAME = 14
 _CR_SUCCESS = 0
 
+# Failures that usually mean Windows has not finished re-enumerating the
+# device - which happens right after a write rewrites the partition table -
+# rather than that the drive is truly gone. Callers may retry these after
+# a short delay before reporting an error to the user.
+TRANSIENT_FAILURES = frozenset({
+    "drive not found in device list",
+    "device not found",  # CM error 0x0D
+})
+
 
 class _SP_DEVINFO_DATA(ctypes.Structure):
     _fields_ = [

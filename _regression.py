@@ -337,11 +337,22 @@ w5._on_eject_clicked()
 assert any(p[1] == "Eject" and p[2] == "No drive selected." for p in _POPUPS)
 w5._current_drive = FAKE
 w5._drives = []  # drive removed meanwhile
+seen = len(_POPUPS)
 w5._on_eject_clicked()
+# A transient miss is retried silently instead of popping up at once.
+assert w5._eject_timer.isActive()
+assert len(_POPUPS) == seen
+w5._eject_timer.stop()
+w5._eject_retries = 0  # retry budget spent: the final attempt must warn
+w5._run_eject_attempt()
 assert any("no longer present" in p[2] for p in _POPUPS)
 w5._drives = [FAKE]
+seen = len(_POPUPS)
 w5._on_eject_clicked()
-assert any("no longer present" in p[2] for p in _POPUPS)
+# FAKE matches again, so this reaches eject_drive; it must either popup
+# or defer a retry - and never leave a pending timer behind for the suite.
+assert len(_POPUPS) > seen or w5._eject_timer.isActive()
+w5._eject_timer.stop()
 check("eject guards (no drive / drive vanished / unmatched)")
 
 # taskbar progress retries after a cooldown instead of latching forever

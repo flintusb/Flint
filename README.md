@@ -2,7 +2,7 @@
 
 Write disk images to USB drives on Windows 10/11, then verify that every byte was written correctly.
 
-**Current release: 2.1.0** — instant CLI command overview, one-command
+**Current release: 2.1.1** — instant CLI command overview, one-command
 desktop app launch, wakeable drive polling, durable deployment campaigns,
 safe resumable writes, bounded multi-drive deployment, audit reports,
 clone read-back verification, and structured boot-confidence diagnostics.

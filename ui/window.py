@@ -66,7 +66,7 @@ from core.backup import BackupWorker
 from core.bootcheck import probe_bootability
 from core.clone import CloneWorker
 from core.drives import DriveDetector, DrivePoller
-from core.eject import eject_drive
+from core.eject import TRANSIENT_FAILURES, eject_drive
 from core.fleet import FleetSession
 from core.history import (
     append_audited_history,
@@ -111,6 +111,14 @@ from ui.widgets import (
 )
 
 logger = logging.getLogger("flint")
+
+# Deferred post-flash eject: the write rewrites the drive's partition table,
+# so Windows is still re-enumerating it when _finish_flash returns. The
+# first attempt is delayed by this much, and a transient SetupAPI miss is
+# retried once after _EJECT_RETRY_DELAY_MS before any error is shown.
+_AUTO_EJECT_DELAY_MS = 1500
+_EJECT_RETRY_DELAY_MS = 2000
+_EJECT_MAX_RETRIES = 1
 
 # U07: the same refusal text every time an action is blocked by a missing
 # prerequisite, so the status strip and the button tooltips never drift.
@@ -283,6 +291,13 @@ class MainWindow(QMainWindow):
         self._tb = None
         self._tb_last_try = 0.0
         self._ejecting = False
+        # Deferred eject state: one single-shot timer drives both the
+        # post-flash auto-eject delay and the transient-failure retry.
+        self._eject_timer = QTimer(self)
+        self._eject_timer.setSingleShot(True)
+        self._eject_timer.timeout.connect(self._run_eject_attempt)
+        self._eject_target: dict[str, Any] | None = None
+        self._eject_retries = 0
         self._theme_timer: QTimer | None = None
         self._last_system_dark: bool | None = None
 
@@ -1336,7 +1351,7 @@ class MainWindow(QMainWindow):
         self._copy_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._copy_btn.setToolTip("Copy the write report to clipboard")
         self._reflash_btn.clicked.connect(self._on_flash_clicked)
-        self._eject_btn.clicked.connect(self._on_eject_clicked)
+        self._eject_btn.clicked.connect(lambda: self._on_eject_clicked())
         self._copy_btn.clicked.connect(self._on_copy_report_clicked)
         done_row.addLayout(done_text)
         done_row.addStretch()
@@ -2358,6 +2373,11 @@ class MainWindow(QMainWindow):
         if self._shutdown_done:
             return
         self._shutdown_done = True
+        # A deferred auto-eject or retry must not fire once the window is
+        # shutting down: the timer would open a modal on a dead window (and
+        # in tests, on whichever test happens to pump events next).
+        self._eject_timer.stop()
+        self._eject_target = None
         self._poller.requestInterruption()
         # W2: the drop zones own hash/analyze/decompress workers that are not
         # reachable through a `self._*` attribute. Closing the window while
@@ -5698,10 +5718,39 @@ class MainWindow(QMainWindow):
                 buttons=[("Close", "primary", "close")],
             )
 
-    def _on_eject_clicked(self) -> None:
+    def _on_eject_clicked(self, target: dict[str, Any] | None = None) -> None:
+        """Eject ``target``, or the active/selected drive when omitted.
+
+        Any manual eject cancels a pending deferred attempt (auto-eject
+        or retry) so the two can never race each other. Passing the drive
+        explicitly matters for the post-flash path: _finish_flash clears
+        _active_write_drive before it ejects, so re-deriving the target
+        here would no longer be the drive that was written.
+        """
+        self._eject_timer.stop()
         if self._ejecting:
             return
-        target = self._active_write_drive or self._current_drive
+        if target is None:
+            target = self._active_write_drive or self._current_drive
+        self._eject_target = target
+        self._eject_retries = _EJECT_MAX_RETRIES
+        self._run_eject_attempt()
+
+    def _schedule_eject(
+        self, target: dict[str, Any] | None, delay_ms: int
+    ) -> None:
+        """Queue an eject attempt (post-flash auto-eject or a retry)."""
+        self._eject_target = target
+        # Fresh schedule = fresh retry budget. Without this the auto-eject
+        # path would inherit the initial 0 and a transient PnP miss would
+        # popup immediately instead of being retried.
+        self._eject_retries = _EJECT_MAX_RETRIES
+        self._eject_timer.start(delay_ms)
+
+    def _run_eject_attempt(self) -> None:
+        if self._ejecting:
+            return
+        target = self._eject_target
         fresh = None
         if target is not None:
             try:
@@ -5713,6 +5762,13 @@ class MainWindow(QMainWindow):
             except Exception:
                 logger.exception("drive recheck failed during eject")
             if fresh is None:
+                if self._eject_retries > 0:
+                    # Right after a write the stick can drop out of the
+                    # polled list while Windows re-enumerates it - retry
+                    # once before concluding it is gone.
+                    self._eject_retries -= 1
+                    self._eject_timer.start(_EJECT_RETRY_DELAY_MS)
+                    return
                 dialogs.inform(
                     self,
                     kind="warning",
@@ -5747,7 +5803,18 @@ class MainWindow(QMainWindow):
                     title="Eject",
                     message="Drive ejected \u2014 safe to unplug.",
                 )
+            elif self._eject_retries > 0 and msg in TRANSIENT_FAILURES:
+                # SetupAPI has not caught up with the re-enumerated device
+                # yet - try once more before reporting failure.
+                self._eject_retries -= 1
+                self._eject_timer.start(_EJECT_RETRY_DELAY_MS)
             else:
+                if msg in TRANSIENT_FAILURES:
+                    msg = (
+                        "Windows is still re-enumerating the drive after "
+                        "the write. Wait a few seconds, then eject it "
+                        "again."
+                    )
                 dialogs.inform(
                     self,
                     kind="error",
@@ -6058,13 +6125,19 @@ class MainWindow(QMainWindow):
         # fleet reports progress in its banner instead.
         if not self._queue_active and not self._fleet_busy:
             if succeeded and settings.get("auto_eject"):
-                self._on_eject_clicked()
+                # Defer: the write just rewrote the partition table, so
+                # Windows is still re-enumerating the drive and ejecting
+                # in this same event-loop turn races PnP ("drive not
+                # found in device list"). `target` was captured before
+                # _active_write_drive was cleared above, so the eject
+                # still resolves the drive that was actually written.
+                self._schedule_eject(target, _AUTO_EJECT_DELAY_MS)
             elif succeeded:
                 result = self._completion(
                     self, kind=kind, title=title, message=detail
                 )
                 if result == "eject":
-                    self._on_eject_clicked()
+                    self._on_eject_clicked(target)
                 elif result == "copy":
                     self._on_copy_report_clicked()
             else:
